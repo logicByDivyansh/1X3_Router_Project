@@ -1,0 +1,114 @@
+module router_fsm(
+input clk,
+input rst,
+input pkt_vld,
+input [1:0]data_in,
+input fifo_full,
+input fifo_empt_0, fifo_empt_1, fifo_empt_2,
+input sft_rst_0, sft_rst_1, sft_rst_2,
+input prt,
+output reg low_pkt_vld,
+output reg wrt_en_reg,
+output reg dtct_add,
+output reg lfd_st,
+output reg ld_st,
+output reg laf_st,
+output reg full_st,
+output reg rst_int_reg,
+output reg busy
+);
+
+parameter DECODE_ADDRESS = 3'b000,
+LOAD_FIRST_DATA = 3'b001,
+LOAD_DATA = 3'b010,
+FIFO_FULL_STATE = 3'b011,
+LOAD_PARITY = 3'b100,
+CHECK_PARITY_ERROR = 3'b101,
+WAIT_TILL_EMPTY = 3'b110,
+LOAD_AFTER_FULL = 3'b111;
+
+reg [2:0]st, next_st;
+always@(posedge clk or negedge rst)
+begin
+if(!rst)
+st<=DECODE_ADDRESS;
+else if(sft_rst_0 || sft_rst_1 || sft_rst_2)
+st<=DECODE_ADDRESS;
+else
+st<=next_st;
+end
+
+always@(*)
+begin
+case(st)
+DECODE_ADDRESS: begin
+if((pkt_vld && (data_in==2'b00) && fifo_empt_0) || (pkt_vld && (data_in==2'b01) && fifo_empt_1) || (pkt_vld && (data_in==2'b10) && fifo_empt_2))
+next_st=LOAD_DATA;
+else if(pkt_vld)
+next_st=WAIT_TILL_EMPTY;
+else
+next_st=DECODE_ADDRESS;
+end
+
+LOAD_FIRST_DATA:next_st= LOAD_DATA;
+
+LOAD_DATA: begin
+if(fifo_full)
+next_st= FIFO_FULL_STATE;
+else if(!pkt_vld)
+next_st=LOAD_PARITY;
+else
+next_st=LOAD_DATA;
+end
+
+FIFO_FULL_STATE: begin
+if(!fifo_full)
+next_st=LOAD_AFTER_FULL;
+else
+next_st=FIFO_FULL_STATE;
+end
+
+LOAD_AFTER_FULL: begin
+if(prt)
+next_st=DECODE_ADDRESS;
+else if(!pkt_vld)
+next_st=LOAD_PARITY;
+else
+next_st=LOAD_DATA;
+end
+
+LOAD_PARITY:next_st=CHECK_PARITY_ERROR;
+CHECK_PARITY_ERROR: begin
+if(fifo_full)
+next_st=FIFO_FULL_STATE;
+else
+next_st=DECODE_ADDRESS;
+end
+
+WAIT_TILL_EMPTY: begin
+if((fifo_empt_0 && (data_in==2'b00)) || (fifo_empt_1 && (data_in ==2'b01)) || (fifo_empt_2 && (data_in==2'b10)))
+next_st=LOAD_FIRST_DATA;
+else
+next_st=WAIT_TILL_EMPTY;
+end
+
+default: next_st=DECODE_ADDRESS;
+endcase
+end
+
+always@(posedge clk or negedge rst) begin
+if(!rst)
+low_pkt_vld<=0;
+else if(st == LOAD_DATA && !pkt_vld)
+low_pkt_vld<=1;
+else if(rst_int_reg)
+low_pkt_vld<=0;
+end
+endmodule
+
+
+
+
+
+
+
