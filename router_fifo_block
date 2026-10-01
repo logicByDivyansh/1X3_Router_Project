@@ -1,0 +1,56 @@
+module router_fifo(
+input clk,
+input rst,
+input sft_rst,
+input wrt_en,
+input rd_en,
+input lfd_st,
+input [7:0]data_in,
+output reg [7:0]dout,
+output full,
+output empt
+);
+
+reg [8:0] mem [15:0];
+reg [3:0]wr_ptr, rd_ptr;
+reg [4:0]count;
+reg lfd_st_s;
+
+assign full = (count==16);
+assign empt = (count==0);
+
+always@(posedge clk)
+lfd_st_s<=lfd_st;
+
+always@(posedge clk or negedge rst) begin
+if(!rst || sft_rst) begin
+wr_ptr<=0;
+end
+else if(wrt_en && !full) begin
+mem[wr_ptr] <= {lfd_st_s, data_in};
+wr_ptr <= wr_ptr+1;
+end
+end
+
+always@(posedge clk or negedge rst) begin
+if(!rst || sft_rst) begin
+rd_ptr<=0;
+dout<=8'bz;
+end
+else if(rd_en && !empt) begin
+dout<=mem[rd_ptr][7:0];
+rd_ptr <= rd_ptr+1;
+end
+end
+
+always@(posedge clk or negedge rst) begin
+if(!rst || sft_rst)
+count<=0;
+else
+case({wrt_en && !full, rd_en && !empt})
+2'b10: count<=count+1;
+2'b01: count<=count-1;
+default: count<=count;
+endcase
+end
+endmodule
