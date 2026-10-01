@@ -1,0 +1,71 @@
+module router_reg(
+input clk,
+input rst,
+input pkt_vld,
+input [7:0]data_in,
+input fifo_full,
+input rst_int_reg,
+input dtct_add,
+input ld_st,
+input laf_st,
+input full_st,
+input lfd_st,
+output reg [7:0]dout,
+output reg err,
+output reg prt,
+output reg low_pkt_vld
+);
+
+reg [7:0]header_byte, fifo_full_byte, int_prt, pkt_prt;
+
+always@(posedge clk or negedge rst) begin
+if(!rst) begin
+dout<=0;
+header_byte<=0;
+fifo_full_byte<=0;
+end
+else begin
+if(lfd_st)
+dout<=header_byte;
+else if(ld_st && !fifo_full)
+dout<=data_in;
+else if(laf_st)
+dout<=fifo_full_byte;
+if(dtct_add && pkt_vld && data_in[1:0] != 2'b11)
+header_byte<=data_in;
+if(ld_st && fifo_full)
+fifo_full_byte<=data_in;
+end
+end
+
+always@(posedge clk or negedge rst) begin
+if(!rst || rst_int_reg) begin
+int_prt<=0;
+pkt_prt<=0;
+prt<=0;
+end
+else if(lfd_st) begin
+int_prt<=header_byte;
+end
+else if(ld_st && pkt_vld && !fifo_full) begin
+int_prt<=int_prt^data_in;
+end
+else if(!pkt_vld && ld_st) begin
+pkt_prt<=data_in;
+prt<=1;
+end
+end
+
+always@(posedge clk or negedge rst) begin
+if(!rst)
+err<=0;
+else if(prt) begin
+if(int_prt!=pkt_prt)
+err<=1;
+else
+err<=0;
+end
+else
+err<=0;
+end
+endmodule
