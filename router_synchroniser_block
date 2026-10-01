@@ -1,0 +1,69 @@
+module router_sync(
+input clk,
+input rst,
+input [1:0]data_in,
+input dtct_add,
+input full_0, full_1, full_2,
+input empt_0, empt_1, empt_2,
+input wrt_en_reg,
+input rd_en_0, rd_en_1, rd_en_2,
+output reg [2:0]wrt_en,
+output reg fifo_full,
+output vld_out_0, vld_out_1, vld_out_2,
+output reg sft_rst_0, sft_rst_1, sft_rst_2
+);
+
+reg [1:0]addr_reg;
+reg [5:0]count_0, count_1, count_2;
+
+always@(posedge clk or negedge rst) begin
+if(!rst)
+addr_reg<=data_in;
+end
+
+always@(*) begin
+wrt_en=3'b000;
+if(wrt_en_reg) begin
+case(addr_reg)
+2'b00: wrt_en=3'b001;
+2'b01: wrt_en=3'b010;
+2'b10: wrt_en=3'b100;
+default: wrt_en=3'b000;
+endcase
+end
+end
+
+always@(*) begin
+case(addr_reg)
+2'b00: fifo_full=full_0;
+2'b01: fifo_full=full_1;
+2'b10: fifo_full=full_2;
+default: fifo_full=1'b0;
+endcase
+end
+
+assign vld_out_0 = ~empt_0;
+assign vld_ouut_1 = ~empt_1;
+assign vld_out_2 = ~empt_2;
+
+always@(posedge clk or negedge rst) begin
+if(!rst) begin
+count_0<=0;
+sft_rst_0<=0;
+end
+else if(vld_out_0 && !rd_en_0) begin
+if(count_0==29) begin
+sft_rst_0<=1;
+count_0<=0;
+end
+else begin
+count_0<=count_0+1;
+sft_rst_0<=0;
+end
+end
+else begin
+count_0<=0;
+sft_rst_0<=0;
+end
+end
+endmodule
