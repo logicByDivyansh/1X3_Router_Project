@@ -1,0 +1,125 @@
+module router_tb;
+
+reg clk;
+reg rst;
+reg pkt_vld;
+reg [7:0] data_in;
+reg rd_en0, rd_en1, rd_en2;
+wire [7:0] dout0, dout1, dout2;
+wire vld_out0, vld_out1, vld_out2;
+wire err, busy;
+
+router uut(
+.clk(clk),
+.rst(rst),
+.pkt_vld(pkt_vld),
+.data_in(data_in),
+.rd_en0(rd_en0),
+.rd_en1(rd_en1),
+.rd_en2(rd_en2),
+.dout0(dout0),
+.dout1(dout1),
+.dout2(dout2),
+.vld_out0(vld_out0),
+.vld_out1(vld_out1),
+.vld_out2(vld_out2),
+.err(err),
+.busy(busy)
+);
+
+always 
+#10 clk=~clk;
+task rst_dut();
+begin
+
+rst=1'b0;
+pkt_vld=1'b0;
+data_in=8'd0;
+rd_en0=1'b0;
+rd_en1=1'b0;
+rd_en2=1'b0;
+
+@(negedge clk);
+@(negedge clk);
+end
+endtask
+
+task send_packet(input [5:0] payload_len, input [1:0] addr, input corrupt_prt);
+reg [7:0] prt_calc;
+reg [7:0] header;
+integer i;
+begin
+@(negedge clk);
+wait(!busy);
+header={payload_len, addr};
+pkt_vld=1'b1;
+data_in=header;
+for(i=0;i<payload_len;i=i+1) begin
+@(negedge clk);
+wait(!busy);
+data_in = $random %256;
+prt_calc = prt_calc^data_in;
+end
+
+@(negedge clk);
+wait(!busy);
+pkt_vld=1'b0;
+if(corrupt_prt)
+data_in = ~prt_calc;
+else
+data_in=prt_calc;
+@(negedge clk);
+end
+endtask
+
+initial begin
+clk=1'b0;
+rst=1'b0;
+
+rst dut();
+$display("[%0t] Reset complete.", $time);
+$display("[0%t] Test 1: Sending valid packet to channel 0", $time);
+send_packet(6'd4, 2'b00, 1'b0);
+
+wait(vld_out0);
+@(negedge clk);
+rd_en0=1'b1;
+            
+repeat (5) begin
+@(negedge clk);
+$display("[%0t] FIFO_0 read data = 0x%2h", $time, dout0);
+end
+
+rd_en0=1'b0;
+@(negedge clk);
+
+#40;
+$display("[%0t] Test 2: sending valid packet to channel 1", $time);
+send_packet(6'd6, 2'b01, 1'b0);
+
+wait(vld_out1);
+@(negedge clk);
+rd_en1=1'b1;
+repeat (7) begin
+@(negedge clk);
+$display("[%0t] FIFO_1 read data= 0x%02h", $time, dout1);
+end
+
+rd_en1=1'b0;
+@(negedge clk);
+
+#40;
+$display("[%0t] Test 3: sending erronious packet to channel 2", $time);
+send_packet(6'd3, 2'b10, 1'b1);
+
+@(negedge clk);
+if(err)
+$display("[%0t] Parity error successfully detected by dut (err=1)!", $time);
+else
+$display("[%0t] Parity error detection failed!", $time);
+
+#100;
+$display("[%0t] Simulation finished", $time);
+$finish;
+end
+endmodule
